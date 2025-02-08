@@ -59,7 +59,12 @@
     CGFloat fontSize = fontSizeObj?[fontSizeObj doubleValue]:16.0f;
     
     NSString *fontFamily = params[@"fontFamily"];
-    self.font = fontFamily?[UIFont fontWithName:fontFamily size:fontSize]:[UIFont systemFontOfSize:fontSize];
+    if (fontFamily){
+        self.font = [UIFont fontWithName:fontFamily size:fontSize];
+    } else {
+        BOOL fontBold = [params[@"fontBold"] boolValue];
+        self.font = fontBold ? [UIFont boldSystemFontOfSize:fontSize] :[UIFont systemFontOfSize: fontSize];
+    }
     
     NSAttributedString *attributedText = params[@"attributedText"];
     if (attributedText) self.attributedText = attributedText;
