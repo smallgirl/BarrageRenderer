@@ -117,7 +117,7 @@
     // 不要清屏上 active——进度回调常 0.5~1s 一跳，清屏会「无限出现消失」；
     // 屏上弹幕由下一帧 updateWithTime 自然飞出/失效即可。
     static NSTimeInterval const FORWARD_BULK_PRUNE_THRESHOLD = 1.0f;
-    // 时间倒退超过该值：进度几乎不会回跳，按 seek 回退处理（清屏 + dead 复活）。
+    // 时间倒退超过该值：进度几乎不会回跳；批量复活 dead，不清屏（对齐原逻辑）。
     static NSTimeInterval const BACKWARD_SEEK_THRESHOLD = 1.0f;
     NSTimeInterval currentTime = [self currentTime];
     NSTimeInterval timeWindow = currentTime - _previousTime; // 有可能为正,也有可能为负(如果倒退的话)
@@ -136,7 +136,7 @@
         // 后续按「当前附近」小窗口激活，并让 smoothness 分母可用
         timeWindow = MAX_EXPIRED_SPRITE_RESERVED_TIME;
     } else if (timeWindow <= -BACKWARD_SEEK_THRESHOLD) {
-        [self deactiveAllSprites];
+        // 与 2.1.2 一致：倒退不清屏上 active，只批量把 dead 里未到点的救回 waiting
         if (_deadSprites.count > 0) {
             NSMutableArray *revive = [NSMutableArray array];
             NSMutableArray *remainDead = [NSMutableArray array];
