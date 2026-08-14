@@ -113,8 +113,9 @@
     // 弹幕最大保留时间, 当视频快进时，有可能大于timeWindow
     static NSTimeInterval const MAX_EXPIRED_SPRITE_RESERVED_TIME = 0.5f; // 经验值
     static NSTimeInterval const DISPATCHER_SMOOTH_FACTOR = 5.0f; // 经验值
-    // 超过该阈值视为 seek/快进快退：走批量路径，避免主线程逐条扫全量 waiting/dead
-    static NSTimeInterval const SEEK_JUMP_THRESHOLD = 1.0f;
+    // 超过该阈值视为 seek/快进快退。须明显高于进度回调间隔（常见 ~0.5–1s），
+    // 否则正常播放会被误判成 seek：每秒清屏再刷 → 弹幕不停出现/消失。
+    static NSTimeInterval const SEEK_JUMP_THRESHOLD = 5.0f;
     NSTimeInterval currentTime = [self currentTime];
     NSTimeInterval timeWindow = currentTime - _previousTime; // 有可能为正,也有可能为负(如果倒退的话)
 //    NSLog(@"内部时间:%f -- 变化时间:%f",currentTime,timeWindow);
