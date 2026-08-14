@@ -84,6 +84,11 @@
     self.forcedInvalid = YES;
 }
 
+- (void)shiftTimestampBy:(NSTimeInterval)delta
+{
+    _timestamp += delta;
+}
+
 #pragma mark - active and deactive
 
 - (void)activeWithContext:(NSDictionary *)context

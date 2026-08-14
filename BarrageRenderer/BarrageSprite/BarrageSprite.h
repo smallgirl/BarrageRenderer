@@ -109,6 +109,9 @@ extern NSString * const kBarrageRendererContextTimestamp;     // 时间戳
 /// 在本次弹幕周期内，强制将弹幕无效
 - (void)forceInvalid;
 
+/// 逻辑时钟跳变时平移 timestamp，保持当前屏上位置/进度不变（快退不清屏）
+- (void)shiftTimestampBy:(NSTimeInterval)delta;
+
 #pragma mark launch
 /// 返回弹幕的初始位置
 - (CGPoint)originInBounds:(CGRect)rect withSprites:(NSArray *)sprites;

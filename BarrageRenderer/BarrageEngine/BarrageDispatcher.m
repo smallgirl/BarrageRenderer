@@ -136,7 +136,7 @@
         // 后续按「当前附近」小窗口激活，并让 smoothness 分母可用
         timeWindow = MAX_EXPIRED_SPRITE_RESERVED_TIME;
     } else if (timeWindow <= -BACKWARD_SEEK_THRESHOLD) {
-        // 与 2.1.2 一致：倒退不清屏上 active，只批量把 dead 里未到点的救回 waiting
+        // 批量把 dead 里未到点的救回 waiting
         if (_deadSprites.count > 0) {
             NSMutableArray *revive = [NSMutableArray array];
             NSMutableArray *remainDead = [NSMutableArray array];
@@ -152,8 +152,12 @@
             }
             [_deadSprites setArray:remainDead];
         }
-        _previousTime = currentTime;
-        return;
+        // 平移屏上弹幕的 timestamp，避免 time 回跳后 duration 变负被判无效「整屏消失」
+        for (BarrageSprite *sprite in _activeSprites) {
+            [sprite shiftTimestampBy:timeWindow];
+        }
+        // 同一帧按小窗口激活新进度附近弹幕（不要 early return 留空屏）
+        timeWindow = MAX_EXPIRED_SPRITE_RESERVED_TIME;
     }
 
     //如果是正, 可能是正常时钟,也可能是快进
