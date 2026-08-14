@@ -113,9 +113,48 @@
     // 弹幕最大保留时间, 当视频快进时，有可能大于timeWindow
     static NSTimeInterval const MAX_EXPIRED_SPRITE_RESERVED_TIME = 0.5f; // 经验值
     static NSTimeInterval const DISPATCHER_SMOOTH_FACTOR = 5.0f; // 经验值
+    // 超过该阈值视为 seek/快进快退：走批量路径，避免主线程逐条扫全量 waiting/dead
+    static NSTimeInterval const SEEK_JUMP_THRESHOLD = 1.0f;
     NSTimeInterval currentTime = [self currentTime];
     NSTimeInterval timeWindow = currentTime - _previousTime; // 有可能为正,也有可能为负(如果倒退的话)
 //    NSLog(@"内部时间:%f -- 变化时间:%f",currentTime,timeWindow);
+
+    if (timeWindow >= SEEK_JUMP_THRESHOLD) {
+        // 快进/seek：批量丢弃过期 waiting，清空屏上旧弹幕
+        NSTimeInterval keepAfter = currentTime - MAX_EXPIRED_SPRITE_RESERVED_TIME;
+        BarrageSpriteQueue *expiredQueue = [_waitingSpriteQueue spriteQueueWithDelayLessThanOrEqualTo:keepAfter];
+        NSArray *expiredSprites = [expiredQueue ascendingSprites];
+        if (expiredSprites.count > 0) {
+            if (_cacheDeadSprites) {
+                [_deadSprites addObjectsFromArray:expiredSprites];
+            }
+            [_waitingSpriteQueue removeSprites:expiredSprites];
+        }
+        [self deactiveAllSprites];
+        // 后续按「当前附近」小窗口激活，并让 smoothness 分母可用
+        timeWindow = MAX_EXPIRED_SPRITE_RESERVED_TIME;
+    } else if (timeWindow <= -SEEK_JUMP_THRESHOLD) {
+        // 快退/seek：清屏；dead 里 delay>current 的批量回 waiting，避免对巨大 dead 逐条磨
+        [self deactiveAllSprites];
+        if (_deadSprites.count > 0) {
+            NSMutableArray *revive = [NSMutableArray array];
+            NSMutableArray *remainDead = [NSMutableArray array];
+            for (BarrageSprite *sprite in _deadSprites) {
+                if (sprite.delay > currentTime) {
+                    [revive addObject:sprite];
+                } else {
+                    [remainDead addObject:sprite];
+                }
+            }
+            for (BarrageSprite *sprite in revive) {
+                [_waitingSpriteQueue addSprite:sprite];
+            }
+            [_deadSprites setArray:remainDead];
+        }
+        _previousTime = currentTime;
+        return;
+    }
+
     //如果是正, 可能是正常时钟,也可能是快进
     if (timeWindow >= 0) {
         BarrageSpriteQueue *queue = [_waitingSpriteQueue spriteQueueWithDelayLessThanOrEqualTo:currentTime];
@@ -145,7 +184,8 @@
         NSInteger count = candidates.count;
         
         if (_smoothness>0.0f) { //可以优化掉此判断
-            NSInteger frequence = (NSInteger)floorf(MAX_EXPIRED_SPRITE_RESERVED_TIME * DISPATCHER_SMOOTH_FACTOR/timeWindow * _smoothness); // 估算平滑频率
+            NSTimeInterval smoothBase = MAX(timeWindow, 1.0/60.0);
+            NSInteger frequence = (NSInteger)floorf(MAX_EXPIRED_SPRITE_RESERVED_TIME * DISPATCHER_SMOOTH_FACTOR/smoothBase * _smoothness); // 估算平滑频率
             if (count>0 && frequence>=1) {
                 count = MAX(1, ceil(count/frequence));
             }
@@ -159,7 +199,7 @@
             [_waitingSpriteQueue removeSprite:sprite];
         }
     }
-    else // 倒退,需要起死回生
+    else // 小幅倒退,需要起死回生
     {
         for (NSInteger i = 0; i < _deadSprites.count; i++) { // 活跃精灵队列
             BarrageSprite * sprite = [_deadSprites objectAtIndex:i];
