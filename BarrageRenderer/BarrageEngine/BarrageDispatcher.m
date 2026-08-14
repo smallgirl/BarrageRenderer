@@ -113,15 +113,17 @@
     // 弹幕最大保留时间, 当视频快进时，有可能大于timeWindow
     static NSTimeInterval const MAX_EXPIRED_SPRITE_RESERVED_TIME = 0.5f; // 经验值
     static NSTimeInterval const DISPATCHER_SMOOTH_FACTOR = 5.0f; // 经验值
-    // 超过该阈值视为 seek/快进快退。须明显高于进度回调间隔（常见 ~0.5–1s），
-    // 否则正常播放会被误判成 seek：每秒清屏再刷 → 弹幕不停出现/消失。
-    static NSTimeInterval const SEEK_JUMP_THRESHOLD = 5.0f;
+    // 时间正向跳变超过该值：只批量丢掉过期 waiting（解决 seek 卡顿）。
+    // 不要清屏上 active——进度回调常 0.5~1s 一跳，清屏会「无限出现消失」；
+    // 屏上弹幕由下一帧 updateWithTime 自然飞出/失效即可。
+    static NSTimeInterval const FORWARD_BULK_PRUNE_THRESHOLD = 1.0f;
+    // 时间倒退超过该值：进度几乎不会回跳，按 seek 回退处理（清屏 + dead 复活）。
+    static NSTimeInterval const BACKWARD_SEEK_THRESHOLD = 1.0f;
     NSTimeInterval currentTime = [self currentTime];
     NSTimeInterval timeWindow = currentTime - _previousTime; // 有可能为正,也有可能为负(如果倒退的话)
 //    NSLog(@"内部时间:%f -- 变化时间:%f",currentTime,timeWindow);
 
-    if (timeWindow >= SEEK_JUMP_THRESHOLD) {
-        // 快进/seek：批量丢弃过期 waiting，清空屏上旧弹幕
+    if (timeWindow >= FORWARD_BULK_PRUNE_THRESHOLD) {
         NSTimeInterval keepAfter = currentTime - MAX_EXPIRED_SPRITE_RESERVED_TIME;
         BarrageSpriteQueue *expiredQueue = [_waitingSpriteQueue spriteQueueWithDelayLessThanOrEqualTo:keepAfter];
         NSArray *expiredSprites = [expiredQueue ascendingSprites];
@@ -131,11 +133,9 @@
             }
             [_waitingSpriteQueue removeSprites:expiredSprites];
         }
-        [self deactiveAllSprites];
         // 后续按「当前附近」小窗口激活，并让 smoothness 分母可用
         timeWindow = MAX_EXPIRED_SPRITE_RESERVED_TIME;
-    } else if (timeWindow <= -SEEK_JUMP_THRESHOLD) {
-        // 快退/seek：清屏；dead 里 delay>current 的批量回 waiting，避免对巨大 dead 逐条磨
+    } else if (timeWindow <= -BACKWARD_SEEK_THRESHOLD) {
         [self deactiveAllSprites];
         if (_deadSprites.count > 0) {
             NSMutableArray *revive = [NSMutableArray array];
